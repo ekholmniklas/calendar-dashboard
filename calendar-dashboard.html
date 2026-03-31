@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0d1117">
+  <title>Kalender Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100vw; height: 100vh; overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117; color: #e6edf3;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      user-select: none; -webkit-user-select: none;
+    }
+
+    /* ===== LAYOUT ===== */
+    .dashboard { display: grid; grid-template-columns: 1fr 1fr; height: 100vh; width: 100vw; }
+    .left-col  { display: flex; flex-direction: column; overflow: hidden; }
+    .right-col { display: flex; flex-direction: column; padding: 8px 8px 8px 4px; gap: 6px; overflow: hidden; }
+
+    .panel {
+      background: #161b22; border-radius: 14px;
+      overflow: hidden; position: relative;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .panel-hdr {
+      display: flex; align-items: center; padding: 5px 10px 2px;
+    }
+    .panel-hdr-txt {
+      font-size: 0.68rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      color: #8b949e; flex: 1;
+    }
+
+    /* ===== PHOTO PANEL ===== */
+    .photo-panel { flex: 1; min-height: 0; position: relative; overflow: hidden; background: #1a1a2e; }
+    .slideshow-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 1.5s ease; }
+    .slideshow-img.hidden { opacity: 0; }
+    .photo-info {
+      position: absolute; top: 12px; left: 12px; z-index: 4;
+      background: rgba(0,0,0,0.52); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border-radius: 10px; padding: 5px 11px;
+      color: #fff; font-size: 0.78rem;
+      opacity: 0; transition: opacity 0.8s ease; pointer-events: none;
+      max-width: 80%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .photo-info.visible { opacity: 1; }
+
+    /* ===== WEATHER EXPANDED (overlay over photo) ===== */
+    .weather-expanded {
+      position: absolute; inset: 0; z-index: 5;
+      background: rgba(13,17,23,0.94);
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      display: none; overflow-y: auto; padding: 14px 16px 12px;
+    }
+    .weather-expanded.open { display: block; }
+    .we-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .we-title  { font-size: 0.95rem; font-weight: 600; }
+    .we-close  {
+      width: 30px; height: 30px; border: none; border-radius: 50%;
+      background: rgba(255,255,255,0.15); color: #fff; cursor: pointer; font-size: 1rem;
+    }
+    .we-day-block  { margin-bottom: 12px; }
+    .we-day-row    { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .we-day-name   { width: 60px; font-size: 0.82rem; color: #8b949e; font-weight: 600; }
+    .we-day-icon   { font-size: 1.1rem; width: 22px; }
+    .we-day-range  { font-size: 0.88rem; font-weight: 600; min-width: 56px; }
+    .we-day-desc   { font-size: 0.72rem; color: #8b949e; flex: 1; }
+    .we-hourly     { display: flex; gap: 4px; padding: 5px 0 0; }
+    .we-h          { flex: 1; text-align: center; background: rgba(255,255,255,0.06); border-radius: 7px; padding: 4px 2px; }
+    .we-h-time     { font-size: 0.64rem; color: #8b949e; }
+    .we-h-icon     { font-size: 1rem; }
+    .we-h-temp     { font-size: 0.8rem; font-weight: 600; }
+
+    /* ===== CLOCK STRIP ===== */
+    .clock-strip {
+      height: 20vh; min-height: 130px; max-height: 200px;
+      display: flex; align-items: center;
+      background: rgba(13,17,23,0.97);
+      border-top: 1px solid rgba(255,255,255,0.07);
+      padding: 10px 14px; gap: 10px; flex-shrink: 0;
+    }
+    .clock-info { flex: 1; }
+    .clock-time {
+      font-size: clamp(3rem, 6vw, 5.5rem);
+      font-weight: 200; letter-spacing: -0.03em; color: #fff; line-height: 1;
+    }
+    .clock-date     { font-size: clamp(0.85rem, 1.4vw, 1.25rem); font-weight: 400; color: rgba(255,255,255,0.9); margin-top: 4px; }
+    .clock-sub      { font-size: clamp(0.72rem, 1.1vw, 0.9rem); color: rgba(255,255,255,0.5); margin-top: 2px; }
+    .clock-special  { font-size: clamp(0.72rem, 1vw, 0.88rem); font-weight: 500; color: #f0883e; margin-top: 2px; }
+    .clock-bdays    { font-size: clamp(0.7rem, 1vw, 0.85rem); color: #f0883e; opacity: 0.9; cursor: pointer; }
+    .clock-bdays.no-bday { color: #555; opacity: 0.6; }
+
+    /* Weather widget — no button border, just clickable */
+    .weather-widget {
+      cursor: pointer; padding: 6px 10px;
+      border-radius: 12px; flex-shrink: 0; min-width: 88px;
+      text-align: center;
+      transition: background 0.2s;
+    }
+    .weather-widget:active { background: rgba(255,255,255,0.08); }
+    .ww-top   { display: flex; align-items: center; gap: 5px; justify-content: center; }
+    .ww-icon  { font-size: 2.2rem; }
+    .ww-temp  { font-size: 2rem; font-weight: 300; color: #fff; }
+    .ww-range { font-size: 0.82rem; color: #8b949e; margin-top: 1px; }
+    .ww-desc  { font-size: 0.68rem; color: #8b949e; }
+    .ww-wind  { font-size: 0.64rem; color: #8b949e; }
+    .ww-tap   { font-size: 0.6rem; color: rgba(255,255,255,0.25); margin-top: 2px; }
+
+    /* ===== CALENDAR PANEL ===== */
+    .cal-panel {
+      flex: 0 0 68%; min-height: 0;
+      border-radius: 14px; overflow: hidden; position: relative;
+      background: #fff; /* background for iframe */
+    }
+    .cal-iframe {
+      width: 100%; height: 100%; border: none; display: block;
+      /* Invert to dark theme: invert colors, rotate hue to restore natural tones */
+      filter: invert(0.92) hue-rotate(180deg) brightness(0.96) saturate(1.05);
+    }
+    .cal-expand-btn {
+      position: absolute; top: 6px; right: 6px; z-index: 5;
+      padding: 3px 8px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.5); color: #c9d1d9; cursor: pointer; font-size: 0.7rem;
+    }
+    .cal-fullscreen {
+      position: absolute; inset: 0; z-index: 10;
+      display: none; flex-direction: column; background: #161b22;
+    }
+    .cal-fullscreen.open { display: flex; }
+    .cal-fullscreen iframe { flex: 1; width: 100%; border: none; filter: invert(0.92) hue-rotate(180deg) brightness(0.96) saturate(1.05); }
+    .overlay-close {
+      position: absolute; top: 8px; right: 8px; z-index: 20;
+      width: 34px; height: 34px; border: none; border-radius: 50%;
+      background: rgba(0,0,0,0.6); color: #fff; cursor: pointer;
+      font-size: 1.1rem; display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ===== BOTTOM STRIP (3 panels in a row) ===== */
+    .bottom-strip { flex: 1; min-height: 0; display: flex; gap: 6px; }
+
+    /* Birthday panel */
+    .bd-panel { flex: 0 0 auto; min-width: 80px; max-width: 130px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 8px; }
+    .bd-panel:active { background: #1c2128; }
+    .bd-emoji-big { font-size: 1.6rem; }
+    .bd-label { font-size: 0.65rem; color: #8b949e; margin-top: 3px; text-align: center; }
+    .bd-today-count {
+      background: #f0883e; color: #000; font-size: 0.65rem;
+      font-weight: 700; border-radius: 10px; padding: 1px 6px; flex-shrink: 0;
+    }
+
+    /* Birthday fullscreen overlay (left side — over photo) */
+    .bd-overlay {
+      position: fixed; left: 0; top: 0;
+      width: 50%; height: 100%; z-index: 150;
+      background: rgba(18,22,29,0.97);
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      display: none; flex-direction: column;
+      overflow-y: auto; padding: 14px 16px;
+      border-right: 1px solid rgba(255,255,255,0.08);
+    }
+    .bd-overlay.open { display: flex; }
+    .bd-ov-hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px; flex-shrink: 0;
+    }
+    .bd-ov-title { font-size: 0.9rem; font-weight: 700; color: #f0883e; }
+    .bd-ov-close {
+      width: 30px; height: 30px; border: none; border-radius: 50%;
+      background: rgba(255,255,255,0.1); color: #fff; cursor: pointer; font-size: 0.9rem;
+    }
+    .bd-month-hdr {
+      font-size: 0.72rem; font-weight: 700; color: #58a6ff;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      padding: 8px 0 3px; border-bottom: 1px solid rgba(88,166,255,0.2);
+      margin-bottom: 2px; margin-top: 6px;
+    }
+    .bd-month-hdr:first-child { margin-top: 0; }
+    .bd-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.82rem;
+    }
+    .bd-row:last-child { border-bottom: none; }
+    .bd-row.bd-today-hl { background: rgba(240,136,62,0.12); border-radius: 6px; padding: 4px 4px; }
+    .bd-row-date { color: #8b949e; min-width: 22px; font-size: 0.75rem; }
+    .bd-row-icon { font-size: 0.95rem; }
+    .bd-row-name { flex: 1; }
+    .bd-row-age  { color: #8b949e; font-size: 0.72rem; }
+
+    /* Transit panel */
+    .transit-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .transit-list  { padding: 1px 10px; overflow: hidden; }
+    .transit-row {
+      display: flex; align-items: center; gap: 7px;
+      padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.82rem;
+    }
+    .transit-row:last-child { border-bottom: none; }
+    .transit-line {
+      background: #009A44; color: #fff; font-weight: 700; font-size: 0.72rem;
+      min-width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+      border-radius: 4px; flex-shrink: 0; padding: 0 3px;
+    }
+    .transit-dest { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .transit-time { font-size: 0.88rem; font-weight: 600; min-width: 44px; text-align: right; }
+    .transit-time.soon { color: #e67e22; }
+    .transit-deviation { font-size: 0.65rem; color: #e67e22; padding: 1px 10px; }
+    .refresh-btn {
+      padding: 2px 7px; border-radius: 5px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: transparent; color: #8b949e; cursor: pointer; font-size: 0.82rem;
+    }
+    .refresh-btn:active { background: rgba(255,255,255,0.08); }
+
+    /* Discover panel */
+    .discover-panel { flex: 1.4; min-width: 0; display: flex; flex-direction: column; }
+    .discover-content { flex: 1; min-height: 0; overflow-y: auto; padding: 0; font-size: 0.82rem; line-height: 1.5; display: flex; flex-direction: column; }
+    .discover-img {
+      width: 100%; height: 100px; object-fit: cover; display: block;
+      border-radius: 12px 12px 0 0; flex-shrink: 0;
+    }
+    .discover-body { padding: 3px 10px 6px; flex: 1; }
+    .discover-cat  { color: #58a6ff; font-size: 0.65rem; }
+    .discover-text { color: #c9d1d9; }
+    .discover-extra {
+      display: none; margin-top: 5px; padding-top: 5px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      color: #8b949e; font-size: 0.76rem; line-height: 1.5;
+    }
+    .discover-extra.open { display: block; }
+    .discover-readmore {
+      display: inline-block; margin-top: 4px; padding: 2px 7px; border-radius: 5px;
+      border: 1px solid rgba(255,255,255,0.15); background: transparent; color: #58a6ff;
+      cursor: pointer; font-size: 0.7rem;
+    }
+
+    /* ===== DIM ===== */
+    .dim-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.85); pointer-events: none;
+      opacity: 0; transition: opacity 1s;
+    }
+    .dim-overlay.active { opacity: 1; pointer-events: auto; }
+
+    /* ===== SCROLLBARS ===== */
+    ::-webkit-scrollbar { width: 3px; height: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+  </style>
+</head>
+<body>
+<div class="dashboard">
+
+  <!-- ===== LEFT COLUMN ===== -->
+  <div class="left-col">
+    <div class="photo-panel" id="photoPanel">
+      <img id="img1" class="slideshow-img" alt="">
+      <img id="img2" class="slideshow-img hidden" alt="">
+      <div class="photo-info" id="photoInfo"></div>
+      <!-- Weather expanded overlay -->
+      <div class="weather-expanded" id="weatherExpanded">
+        <div class="we-header">
+          <span class="we-title">🌤️ Väderprognos – 7 dagar</span>
+          <button class="we-close" onclick="toggleWeather()">✕</button>
+        </div>
+        <div id="weatherExpandedContent">Laddar...</div>
+      </div>
+    </div>
+
+    <!-- Clock strip -->
+    <div class="clock-strip">
+      <div class="clock-info">
+        <div class="clock-time" id="clockTime">00:00</div>
+        <div class="clock-date" id="clockDate"></div>
+        <div class="clock-sub"     id="clockSub"></div>
+        <div class="clock-special" id="clockSpecial"></div>
+        <div style="display:flex;align-items:center;gap:5px;margin-top:3px">
+          <div class="clock-bdays" id="clockBdays" onclick="openBdOverlay()" title="Kommande födelsedagar"></div>
+          <span class="bd-today-count" id="bdTodayCount" style="display:none"></span>
+        </div>
+      </div>
+      <div class="weather-widget" onclick="toggleWeather()">
+        <div class="ww-top">
+          <span class="ww-icon" id="wwIcon">🌡️</span>
+          <span class="ww-temp" id="wwTemp">--°</span>
+        </div>
+        <div class="ww-range" id="wwRange">-- / --°</div>
+        <div class="ww-desc"  id="wwDesc"></div>
+        <div class="ww-wind"  id="wwWind"></div>
+        <div class="ww-tap">tryck för prognos</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== RIGHT COLUMN ===== -->
+  <div class="right-col">
+
+    <!-- Calendar (~68% height) -->
+    <div class="cal-panel" id="calPanel">
+      <iframe class="cal-iframe" id="calIframe"
+        src="https://calendar.google.com/calendar/embed?src=niklasjonsson89%40hotmail.com&ctz=Europe%2FStockholm&hl=sv&showTitle=0&showNav=1&showPrint=0&showTabs=0&showCalendars=0&mode=MONTH">
+      </iframe>
+      <button class="cal-expand-btn" onclick="openCalFull()">⛶ Fullskärm</button>
+      <!-- Fullscreen overlay -->
+      <div class="cal-fullscreen" id="calFullscreen">
+        <button class="overlay-close" onclick="closeCalFull()">✕</button>
+        <iframe id="calFullIframe" src=""></iframe>
+      </div>
+    </div>
+
+    <!-- Bottom strip: 2 panels -->
+    <div class="bottom-strip">
+
+      <!-- Transit -->
+      <div class="panel transit-panel">
+        <div class="panel-hdr">
+          <span class="panel-hdr-txt">🚇 T-bana mot T-centralen</span>
+          <button class="refresh-btn" onclick="hardRefreshTransit()">↺</button>
+        </div>
+        <div class="transit-list" id="transitList">Laddar...</div>
+        <div class="transit-deviation" id="transitDeviation"></div>
+      </div>
+
+      <!-- Discover -->
+      <div class="panel discover-panel">
+        <div class="panel-hdr">
+          <span class="panel-hdr-txt">Visste du att…</span>
+        </div>
+        <div class="discover-content" id="discoverContent">Laddar...</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Birthday full overlay (right half of screen) -->
+<div class="bd-overlay" id="bdOverlay">
+  <div class="bd-ov-hdr">
+    <span class="bd-ov-title">🎂 Kommande födelsedagar</span>
+    <button class="bd-ov-close" onclick="closeBdOverlay()">✕</button>
+  </div>
+  <div id="bdOverlayContent"></div>
+</div>
+
+<!-- Dim overlay -->
+<div class="dim-overlay" id="dimOverlay"></div>
+
+<script>
+// ===== CONFIG =====
+const CONFIG = {
+  photos: [],
+  photoIntervalMs: 30000,
+  driveFolderId: '1FvmUMbIvo_KzXRvxQmmkWQWeTTWdj79t',
+  weatherLat: 59.2748, weatherLon: 18.0501,
+  weatherRefreshMs: 30 * 60 * 1000,
+  slSiteId: 9164, transitRefreshMs: 30000,
+  googleCalendarApiKey: 'AIzaSyA1Y_B8KzYq1Xd2npfxiOT6c9Sr5pZXru0',
+  dimStartHour: 22, dimEndHour: 7,
+  birthdays: [
+    { date:'16/1',  name:'Elise',             year:2014 },
+    { date:'26/1',  name:'Edin',              year:1983 },
+    { date:'29/1',  name:'Jerry',             year:1951 },
+    { date:'29/1',  name:'David B',           year:1983 },
+    { date:'12/2',  name:'Elvy',              year:1947 },
+    { date:'14/2',  name:'Alla hjärtans dag', icon:'❤️', type:'event' },
+    { date:'2/3',   name:'Helena',            year:1983 },
+    { date:'5/3',   name:'Hanna R',           year:1987 },
+    { date:'11/3',  name:'Kalle',             year:2013 },
+    { date:'18/3',  name:'Tommy',             year:1981 },
+    { date:'20/3',  name:'Elsa',              year:2006 },
+    { date:'21/3',  name:'Degen',             year:1989 },
+    { date:'10/4',  name:'Ulf',               year:1989 },
+    { date:'20/4',  name:'12 år tillsammans', icon:'❤️', type:'event' },
+    { date:'3/5',   name:'Anna J',            year:1985 },
+    { date:'5/5',   name:'Anna G',            year:1983 },
+    { date:'7/5',   name:'Linus',             year:1989 },
+    { date:'18/5',  name:'Kusin Malin',       year:1983 },
+    { date:'21/5',  name:'Axel',              year:2016 },
+    { date:'21/5',  name:'Sofia S',           year:1976 },
+    { date:'26/5',  name:'Miiken',            year:1990 },
+    { date:'31/5',  name:'Julie',             year:2011 },
+    { date:'31/5',  name:'Sia',               year:2012 },
+    { date:'5/6',   name:'Adde',              year:1989 },
+    { date:'8/6',   name:'Anders',            year:1983 },
+    { date:'10/6',  name:'Anna Å',            year:1983 },
+    { date:'21/6',  name:'Albin',             year:1984 },
+    { date:'21/6',  name:'Firren',            year:1989 },
+    { date:'26/6',  name:'Aina',              year:1949 },
+    { date:'8/7',   name:'Micke',             year:1974 },
+    { date:'11/7',  name:'Sam',               year:2021 },
+    { date:'14/7',  name:'Jonathan',          year:1983 },
+    { date:'17/7',  name:'Oscar',             year:1983 },
+    { date:'19/7',  name:'Niklas',            year:1989 },
+    { date:'24/7',  name:'Fredde',            year:1989 },
+    { date:'24/7',  name:'Wilma',             year:2002 },
+    { date:'24/7',  name:'Walter',            year:2002 },
+    { date:'3/8',   name:'Kusin Lars',        year:1977 },
+    { date:'6/8',   name:'Malin',             year:1981 },
+    { date:'7/8',   name:'Henrik',            year:1980 },
+    { date:'10/8',  name:'Felix',             year:2023 },
+    { date:'13/8',  name:'Madde Ö',           year:1983 },
+    { date:'27/8',  name:'Calle',             year:1981 },
+    { date:'7/9',   name:'Roland',            year:1947 },
+    { date:'10/9',  name:'Anneli',            year:1975 },
+    { date:'14/9',  name:'Anna CD',           year:1983 },
+    { date:'26/9',  name:'Herman',            year:2009 },
+    { date:'27/9',  name:'Siri',              year:2010 },
+    { date:'12/10', name:'Sandra',            year:1989 },
+    { date:'31/10', name:'Alfred',            year:2010 },
+    { date:'12/11', name:'Siri',              year:1990 },
+    { date:'19/11', name:'Elisabet',          year:1952 },
+    { date:'28/11', name:'Maria',             year:1972 },
+    { date:'8/12',  name:'Karlsson',          year:1989 },
+    { date:'11/12', name:'Andreas',           year:1979 },
+    { date:'15/12', name:'Kusin Daniel',      year:1986 },
+    { date:'21/12', name:'Kusin Isak',        year:1995 },
+  ],
+};
+
+// ===== NAME DAYS =====
+const ND = {
+  '1/1':'Nyårsdagen','2/1':'Svea','3/1':'Alfred','4/1':'Rut','5/1':'Hanna',
+  '6/1':'Trettondedag jul','7/1':'August','8/1':'Erland','9/1':'Gunnar','10/1':'Sigurd',
+  '11/1':'Jan','12/1':'Frideborg','13/1':'Knut','14/1':'Felix','15/1':'Laura',
+  '16/1':'Hjalmar','17/1':'Anton','18/1':'Hilda','19/1':'Henrik','20/1':'Fabian, Sebastian',
+  '21/1':'Agnes','22/1':'Vincent','23/1':'Frej, Freja','24/1':'Erika','25/1':'Paul',
+  '26/1':'Bodil','27/1':'Göte','28/1':'Karl','29/1':'Diana','30/1':'Gunilla','31/1':'Ivar',
+  '1/2':'Max','2/2':'Kyndelsmässodagen','3/2':'Disa','4/2':'Ansgar','5/2':'Agata',
+  '6/2':'Dorotea','7/2':'Rikard','8/2':'Berta','9/2':'Fanny','10/2':'Iris',
+  '11/2':'Yngve','12/2':'Evelina','13/2':'Agne, Ove','14/2':'Valentin','15/2':'Sigfrid',
+  '16/2':'Julia','17/2':'Alexandra','18/2':'Frida','19/2':'Gabriella','20/2':'Vivianne',
+  '21/2':'Hilding','22/2':'Pia','23/2':'Torsten','24/2':'Mattias','25/2':'Sigvard',
+  '26/2':'Torgny','27/2':'Lage','28/2':'Maria','29/2':'Skottdagen',
+  '1/3':'Albin','2/3':'Ernst','3/3':'Gunborg','4/3':'Adrian','5/3':'Tora',
+  '6/3':'Ebba','7/3':'Camilla','8/3':'Siv','9/3':'Torbjörn','10/3':'Edla',
+  '11/3':'Edvin','12/3':'Viktoria','13/3':'Greger','14/3':'Matilda','15/3':'Kristoffer',
+  '16/3':'Herbert','17/3':'Gertrud','18/3':'Edvard','19/3':'Josef','20/3':'Joakim',
+  '21/3':'Bengt','22/3':'Kennet','23/3':'Gerda','24/3':'Gabriel','25/3':'Marie bebådelsedag',
+  '26/3':'Emanuel','27/3':'Rudolf','28/3':'Malkolm','29/3':'Jonas','30/3':'Holger','31/3':'Ester',
+  '1/4':'Harald','2/4':'Gudmund','3/4':'Ferdinand','4/4':'Marianne','5/4':'Irene',
+  '6/4':'Vilhelm','7/4':'Irma','8/4':'Nadja','9/4':'Otto','10/4':'Ingvar',
+  '11/4':'Ulf, Ylva','12/4':'Liv','13/4':'Artur','14/4':'Tiburtius','15/4':'Olivia',
+  '16/4':'Patrik','17/4':'Elias','18/4':'Valdemar','19/4':'Olaus','20/4':'Amalia',
+  '21/4':'Anneli','22/4':'Allan','23/4':'Georg','24/4':'Vega','25/4':'Markus',
+  '26/4':'Teresia','27/4':'Engelbrekt','28/4':'Ture','29/4':'Tyko','30/4':'Valborg',
+  '1/5':'Första maj','2/5':'Filip','3/5':'John','4/5':'Monika','5/5':'Gotthard',
+  '6/5':'Marit','7/5':'Carina','8/5':'Åke','9/5':'Reidar','10/5':'Esbjörn',
+  '11/5':'Märta','12/5':'Charlotta','13/5':'Linnea','14/5':'Halvard','15/5':'Sofia',
+  '16/5':'Ronald','17/5':'Rebecka','18/5':'Erik','19/5':'Maj','20/5':'Karolina',
+  '21/5':'Konstantin','22/5':'Hemming','23/5':'Desideria','24/5':'Ivan','25/5':'Urban',
+  '26/5':'Vilhelmina','27/5':'Beda','28/5':'Ingeborg','29/5':'Yvonne','30/5':'Vera','31/5':'Petronella',
+  '1/6':'Gun','2/6':'Rutger','3/6':'Ingemar','4/6':'Solbritt','5/6':'Bo',
+  '6/6':'Gustaf','7/6':'Robert','8/6':'Eivor','9/6':'Börje','10/6':'Svante',
+  '11/6':'Bertil','12/6':'Eskil','13/6':'Aina','14/6':'Håkan','15/6':'Margit',
+  '16/6':'Axel','17/6':'Torborg','18/6':'Björn','19/6':'Germund','20/6':'Linda',
+  '21/6':'Alf, Alvar','22/6':'Paulina','23/6':'Adolf, Alice','24/6':'Midsommardagen','25/6':'David',
+  '26/6':'Rakel','27/6':'Selma','28/6':'Leo','29/6':'Peter, Petra','30/6':'Elof',
+  '1/7':'Aron','2/7':'Rosa','3/7':'Aurora','4/7':'Ulrika','5/7':'Laila',
+  '6/7':'Esaias','7/7':'Klas','8/7':'Kjell','9/7':'Jörgen','10/7':'Andre',
+  '11/7':'Eleonora','12/7':'Herman','13/7':'Joel','14/7':'Folke','15/7':'Ragnhild',
+  '16/7':'Reinhold','17/7':'Bruno','18/7':'Fredrik','19/7':'Sara','20/7':'Margareta',
+  '21/7':'Johanna','22/7':'Magdalena','23/7':'Emma','24/7':'Kristina','25/7':'Jakob',
+  '26/7':'Jesper','27/7':'Marta','28/7':'Botvid','29/7':'Olof','30/7':'Algot','31/7':'Helena, Elin',
+  '1/8':'Per, Pär','2/8':'Karin','3/8':'Tage','4/8':'Arne','5/8':'Ulrik',
+  '6/8':'Alfons, Inez','7/8':'Dennis','8/8':'Silvia','9/8':'Roland','10/8':'Lars',
+  '11/8':'Susanna','12/8':'Klara','13/8':'Kaj','14/8':'Uno','15/8':'Stella',
+  '16/8':'Brynolf','17/8':'Verner','18/8':'Ellen, Lena','19/8':'Magnus','20/8':'Bernhard',
+  '21/8':'Jon','22/8':'Henrietta','23/8':'Signe','24/8':'Bartolomeus','25/8':'Lovisa',
+  '26/8':'Östen','27/8':'Rolf','28/8':'Fatima','29/8':'Hans','30/8':'Albert','31/8':'Arvid',
+  '1/9':'Sam, Samuel','2/9':'Justus','3/9':'Alfhild','4/9':'Gisela','5/9':'Adela',
+  '6/9':'Lena','7/9':'Regina','8/9':'Alma','9/9':'Anita','10/9':'Tord',
+  '11/9':'Dagny','12/9':'Åsa','13/9':'Sture','14/9':'Ida','15/9':'Sigrid',
+  '16/9':'Dag','17/9':'Hildegard','18/9':'Orvar','19/9':'Fredrika','20/9':'Elise',
+  '21/9':'Matteus','22/9':'Maurits','23/9':'Tekla','24/9':'Gerhard','25/9':'Tryggve',
+  '26/9':'Einar','27/9':'Dagmar','28/9':'Lennart','29/9':'Mikael','30/9':'Helge',
+  '1/10':'Ragnar','2/10':'Ludvig','3/10':'Evald','4/10':'Frans','5/10':'Bror',
+  '6/10':'Siegrid','7/10':'Birgitta','8/10':'Nils','9/10':'Ingrid','10/10':'Harry',
+  '11/10':'Torsten','12/10':'Valfrid','13/10':'Berit','14/10':'Stellan','15/10':'Hedvig',
+  '16/10':'Finn','17/10':'Antonia','18/10':'Lukas','19/10':'Tore','20/10':'Sibylla',
+  '21/10':'Ursula','22/10':'Malin','23/10':'Severin','24/10':'Evert','25/10':'Inga',
+  '26/10':'Amanda','27/10':'Sabina','28/10':'Simon','29/10':'Viola','30/10':'Elsa','31/10':'Edit',
+  '1/11':'Allhelgonadagen','2/11':'Tobias','3/11':'Hubert','4/11':'Sverker','5/11':'Eugen',
+  '6/11':'Gustaf Adolf','7/11':'Ingegerd','8/11':'Vendela','9/11':'Teodor','10/11':'Martin',
+  '11/11':'Mårten','12/11':'Konrad','13/11':'Kristian','14/11':'Emil','15/11':'Leopold',
+  '16/11':'Edmund','17/11':'Naemi','18/11':'Lillemor','19/11':'Elisabet','20/11':'Pontus',
+  '21/11':'Helga','22/11':'Cecilia','23/11':'Klemens','24/11':'Flore','25/11':'Katarina',
+  '26/11':'Linus','27/11':'Astrid','28/11':'Malte','29/11':'Andreas','30/11':'David',
+  '1/12':'Oskar','2/12':'Beata','3/12':'Lydia','4/12':'Barbara','5/12':'Sven',
+  '6/12':'Nikolaus','7/12':'Agaton','8/12':'Virginia','9/12':'Anna','10/12':'Malin',
+  '11/12':'Daniel','12/12':'Alexander','13/12':'Lucia','14/12':'Sten','15/12':'Gottfrid',
+  '16/12':'Assar','17/12':'Stig','18/12':'Abraham','19/12':'Isak','20/12':'Israel',
+  '21/12':'Tomas','22/12':'Natanael','23/12':'Adam, Eva','24/12':'Julafton',
+  '25/12':'Juldagen','26/12':'Stefan','27/12':'Johannes','28/12':'Heliga barn',
+  '29/12':'Natanael','30/12':'Åke','31/12':'Silvester',
+};
+
+// ===== SPECIAL DAYS =====
+function getEaster(y){
+  const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4;
+  const f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
+  const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
+  const m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;
+  return new Date(y,mo-1,da);
+}
+function getSpecialDay(date){
+  const d=date.getDate(),m=date.getMonth()+1,y=date.getFullYear(),dow=date.getDay();
+  const key=`${d}/${m}`;
+  const fixed={'1/1':'Nyårsdagen','6/1':'Trettondedag jul','14/2':'Alla hjärtans dag',
+    '8/3':'Internationella kvinnodagen','30/4':'Valborgsmässoafton','1/5':'Första maj',
+    '6/6':'Sveriges nationaldag','4/10':'Kanelbullens dag','31/10':'Halloween',
+    '24/12':'Julafton','25/12':'Juldagen','26/12':'Annandag jul','31/12':'Nyårsafton'};
+  if(fixed[key]) return fixed[key];
+  if(m===6&&d>=19&&d<=25&&dow===5) return 'Midsommarafton';
+  if(m===6&&d>=20&&d<=26&&dow===6) return 'Midsommardagen';
+  if(m===5&&dow===0&&d>24) return 'Mors dag';
+  if(m===11&&dow===0&&d>=8&&d<=14) return 'Fars dag';
+  if((m===10&&d===31&&dow===6)||(m===11&&d<=6&&dow===6)) return 'Alla helgons dag';
+  const easter=getEaster(y);
+  const diff=Math.round((new Date(y,m-1,d)-easter)/86400000);
+  if(diff===-47) return 'Fettisdagen';
+  if(diff===-2)  return 'Långfredagen';
+  if(diff===-1)  return 'Påskafton';
+  if(diff===0)   return 'Påskdagen';
+  if(diff===1)   return 'Annandag påsk';
+  if(diff===39)  return 'Kristi himmelsfärdsdag';
+  if(diff===49)  return 'Pingstdagen';
+  return '';
+}
+
+// ===== CLOCK =====
+const WEEKDAYS=['Söndag','Måndag','Tisdag','Onsdag','Torsdag','Fredag','Lördag'];
+const MONTHS=['januari','februari','mars','april','maj','juni','juli','augusti','september','oktober','november','december'];
+const MONTHS_CAP=['Januari','Februari','Mars','April','Maj','Juni','Juli','Augusti','September','Oktober','November','December'];
+
+function updateClock(){
+  const n=new Date();
+  document.getElementById('clockTime').textContent=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  document.getElementById('clockDate').textContent=`${WEEKDAYS[n.getDay()]} ${n.getDate()} ${MONTHS[n.getMonth()]}`;
+  document.getElementById('clockSub').textContent=ND[`${n.getDate()}/${n.getMonth()+1}`]||'';
+  document.getElementById('clockSpecial').textContent=getSpecialDay(n);
+}
+updateClock(); setInterval(updateClock,1000);
+
+// ===== BIRTHDAYS =====
+function calcAge(year,refDate){ return refDate?refDate.getFullYear()-year:new Date().getFullYear()-year; }
+
+function checkBirthdays(){
+  const now=new Date();
+  const key=`${now.getDate()}/${now.getMonth()+1}`;
+  const todays=CONFIG.birthdays.filter(b=>b.date===key);
+  const bdEl=document.getElementById('clockBdays');
+  const countEl=document.getElementById('bdTodayCount');
+  if(todays.length>0){
+    bdEl.textContent=todays.map(b=>{
+      const icon=b.icon||'🎂';
+      const age=b.year&&b.type!=='event'?` fyller ${calcAge(b.year)} år`:'';
+      return `${icon} ${b.name}${age}`;
+    }).join('  ·  ');
+    bdEl.classList.remove('no-bday');
+    if(countEl){countEl.textContent=todays.length;countEl.style.display='';}
+  } else {
+    bdEl.textContent='🎂 Inga födelsedagar idag — tryck för kommande';
+    bdEl.classList.add('no-bday');
+    if(countEl) countEl.style.display='none';
+  }
+}
+checkBirthdays();
+
+function buildBdOverlay(){
+  const now=new Date();
+  const curMonth=now.getMonth()+1;
+  const groups={};
+  CONFIG.birthdays.forEach(b=>{
+    const [d,m]=b.date.split('/').map(Number);
+    if(!groups[m]) groups[m]=[];
+    groups[m].push({...b,day:d,month:m});
+  });
+  let html='';
+  for(let i=0;i<12;i++){
+    const m=((curMonth-1+i)%12)+1;
+    if(!groups[m]) continue;
+    const entries=groups[m].sort((a,b)=>a.day-b.day);
+    html+=`<div class="bd-month-hdr">${MONTHS_CAP[m-1]}</div>`;
+    html+=entries.map(b=>{
+      const icon=b.icon||'🎂';
+      const isToday=b.day===now.getDate()&&b.month===curMonth;
+      const refDate=new Date(now.getFullYear(),b.month-1,b.day);
+      const age=b.year&&b.type!=='event'?`${calcAge(b.year,refDate)} år`:'';
+      return `<div class="bd-row${isToday?' bd-today-hl':''}">
+        <span class="bd-row-date">${b.day}</span>
+        <span class="bd-row-icon">${icon}</span>
+        <span class="bd-row-name">${b.name}</span>
+        <span class="bd-row-age">${age}</span>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('bdOverlayContent').innerHTML=html;
+}
+
+let bdCloseTimer=null;
+function openBdOverlay(){
+  buildBdOverlay();
+  document.getElementById('bdOverlay').classList.add('open');
+  clearTimeout(bdCloseTimer);
+  bdCloseTimer=setTimeout(closeBdOverlay,60000);
+}
+function closeBdOverlay(){
+  clearTimeout(bdCloseTimer);
+  document.getElementById('bdOverlay').classList.remove('open');
+}
+
+// ===== AUTO-DIM =====
+function checkDim(){
+  const h=new Date().getHours();
+  const on=CONFIG.dimStartHour>CONFIG.dimEndHour?(h>=CONFIG.dimStartHour||h<CONFIG.dimEndHour):(h>=CONFIG.dimStartHour&&h<CONFIG.dimEndHour);
+  document.getElementById('dimOverlay').classList.toggle('active',on);
+}
+checkDim(); setInterval(checkDim,60000);
+
+// ===== SLIDESHOW =====
+let curPhotoIdx=0, activeImg=1, slideshowTimer=null;
+const img1=document.getElementById('img1'), img2=document.getElementById('img2');
+const defPhotos=['data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect fill="#1a1a2e" width="800" height="600"/><text x="400" y="300" fill="#555" font-size="22" text-anchor="middle" font-family="sans-serif">Lägg till bilder i Google Drive-mappen</text></svg>')];
+let allPhotos=[...defPhotos], photoMeta=[];
+const geocodeCache={};
+
+function shuffleArr(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+async function getPlace(lat,lng){
+  const key=`${Math.round(lat*10)/10},${Math.round(lng*10)/10}`;
+  if(geocodeCache[key]!==undefined) return geocodeCache[key];
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=sv`,{headers:{'User-Agent':'HomeDashboard/1.0'}});
+    const d=await r.json(); const a=d.address||{};
+    const place=a.city||a.town||a.village||a.municipality||a.county||'';
+    geocodeCache[key]=place; return place;
+  }catch(e){geocodeCache[key]='';return '';}
+}
+function parseExifDate(s){if(!s)return null;const m=s.match(/(\d{4}):(\d{2}):(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
+function parseFilenameDate(n){const m=(n||'').match(/(\d{4})(\d{2})(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
+function fmtDate(d){if(!d||isNaN(d))return '';return d.toLocaleDateString('sv-SE',{day:'numeric',month:'long',year:'numeric'});}
+
+async function showPhotoInfo(idx){
+  const el=document.getElementById('photoInfo');
+  const meta=photoMeta[idx];
+  if(!meta){el.classList.remove('visible');return;}
+  const d=parseExifDate(meta.dateStr)||parseFilenameDate(meta.name);
+  const dateStr=fmtDate(d);
+  let place=meta.place;
+  if(place===undefined&&meta.lat&&meta.lng){meta.place=await getPlace(meta.lat,meta.lng);place=meta.place;}
+  const parts=[];
+  if(place) parts.push('📍 '+place);
+  if(dateStr) parts.push(dateStr);
+  if(parts.length){el.textContent=parts.join('  •  ');el.classList.add('visible');}
+  else el.classList.remove('visible');
+}
+
+async function loadDrivePhotos(){
+  if(!CONFIG.driveFolderId||!CONFIG.googleCalendarApiKey) return;
+  try{
+    const q=encodeURIComponent(`'${CONFIG.driveFolderId}' in parents and mimeType contains 'image/' and trashed=false`);
+    const url=`https://www.googleapis.com/drive/v3/files?q=${q}&key=${CONFIG.googleCalendarApiKey}&fields=files(id,name,imageMediaMetadata)&pageSize=100&orderBy=createdTime desc`;
+    const data=await fetch(url).then(r=>r.json());
+    if(data.files&&data.files.length>0){
+      const meta=data.files.map(f=>({
+        url:`https://drive.google.com/thumbnail?id=${f.id}&sz=w1280`,
+        name:f.name, dateStr:f.imageMediaMetadata?f.imageMediaMetadata.time:null,
+        lat:f.imageMediaMetadata?.location?.latitude??null,
+        lng:f.imageMediaMetadata?.location?.longitude??null, place:undefined
+      }));
+      photoMeta=shuffleArr(meta); allPhotos=photoMeta.map(m=>m.url);
+      curPhotoIdx=0; img1.src=allPhotos[0];
+      clearInterval(slideshowTimer);
+      if(allPhotos.length>1) slideshowTimer=setInterval(showNextPhoto,CONFIG.photoIntervalMs);
+      showPhotoInfo(0);
+    }
+  }catch(e){console.error('Drive photos failed:',e);}
+}
+function showNextPhoto(){
+  if(allPhotos.length<=1) return;
+  curPhotoIdx=(curPhotoIdx+1)%allPhotos.length;
+  const next=activeImg===1?img2:img1, curr=activeImg===1?img1:img2;
+  next.src=allPhotos[curPhotoIdx]; next.classList.remove('hidden'); curr.classList.add('hidden');
+  activeImg=activeImg===1?2:1; showPhotoInfo(curPhotoIdx);
+}
+function showPrevPhoto(){
+  if(allPhotos.length<=1) return;
+  curPhotoIdx=(curPhotoIdx-1+allPhotos.length)%allPhotos.length;
+  const next=activeImg===1?img2:img1, curr=activeImg===1?img1:img2;
+  next.src=allPhotos[curPhotoIdx]; next.classList.remove('hidden'); curr.classList.add('hidden');
+  activeImg=activeImg===1?2:1; showPhotoInfo(curPhotoIdx);
+}
+img1.src=allPhotos[0];
+if(allPhotos.length>1) slideshowTimer=setInterval(showNextPhoto,CONFIG.photoIntervalMs);
+loadDrivePhotos(); setInterval(loadDrivePhotos,60*60*1000);
+let touchStartX=0;
+document.getElementById('photoPanel').addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX;},{passive:true});
+document.getElementById('photoPanel').addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].clientX-touchStartX;
+  if(dx<-50) showNextPhoto(); else if(dx>50) showPrevPhoto();
+});
+
+// ===== WEATHER (Open-Meteo — WMO codes) =====
+// WMO weather code → emoji
+const WI={
+  0:'☀️',1:'🌤️',2:'⛅',3:'☁️',
+  45:'🌫️',48:'🌫️',
+  51:'🌦️',53:'🌦️',55:'🌧️',56:'🌧️',57:'🌧️',
+  61:'🌧️',63:'🌧️',65:'🌧️',66:'🌧️',67:'🌧️',
+  71:'🌨️',73:'🌨️',75:'❄️',77:'❄️',
+  80:'🌦️',81:'🌧️',82:'🌧️',85:'🌨️',86:'🌨️',
+  95:'⛈️',96:'⛈️',99:'⛈️'
+};
+const WT={
+  0:'Klart',1:'Nästan klart',2:'Växlande',3:'Mulet',
+  45:'Dimma',48:'Dimma',
+  51:'Lätt duggregn',53:'Duggregn',55:'Kraftigt duggregn',56:'Underkylt duggregn',57:'Underkylt duggregn',
+  61:'Lätt regn',63:'Regn',65:'Kraftigt regn',66:'Underkylt regn',67:'Underkylt regn',
+  71:'Lätt snö',73:'Snöfall',75:'Kraftigt snö',77:'Snökorn',
+  80:'Lätta regnskurar',81:'Regnskurar',82:'Kraftiga regnskurar',85:'Lätta snöbyar',86:'Snöbyar',
+  95:'Åskväder',96:'Åskväder m. hagel',99:'Åskväder m. hagel'
+};
+
+// Convert open-meteo hourly arrays to simple objects
+function parseOpenMeteo(d){
+  const h=d.hourly;
+  return h.time.map((t,i)=>({
+    time:new Date(t.replace('T',' ')),          // "2026-03-31T14:00" → Date
+    temp:Math.round(h.temperature_2m[i]),
+    code:h.weathercode[i],
+    wind:Math.round(h.windspeed_10m[i]/3.6*10)/10  // km/h → m/s
+  }));
+}
+
+let lastTs=null, weatherCloseTimer=null;
+
+async function fetchWeather(){
+  try{
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${CONFIG.weatherLat}&longitude=${CONFIG.weatherLon}&hourly=temperature_2m,weathercode,windspeed_10m&forecast_days=7&timezone=Europe%2FStockholm`;
+    const r=await fetch(url,{cache:'no-cache'});
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d=await r.json();
+    if(!d||!d.hourly||!d.hourly.time) throw new Error('Ingen data');
+    lastTs=parseOpenMeteo(d);
+    renderWeatherCompact(lastTs);
+    if(document.getElementById('weatherExpanded').classList.contains('open')) renderWeatherExpanded(lastTs);
+  }catch(e){
+    console.error('Väder-fel:',e);
+    document.getElementById('wwIcon').textContent='⚠️';
+    document.getElementById('wwTemp').textContent='?';
+    document.getElementById('wwRange').textContent='Ej tillgänglig';
+    document.getElementById('wwDesc').textContent=String(e.message||'Nätverksfel');
+    document.getElementById('wwWind').textContent='Försöker igen...';
+    setTimeout(fetchWeather,60000);
+  }
+}
+
+function renderWeatherCompact(ts){
+  const now=new Date();
+  let cl=ts[0];
+  for(const t of ts){if(t.time<=now)cl=t;else break;}
+  const todayStr=now.toDateString();
+  const todayE=ts.filter(t=>t.time.toDateString()===todayStr);
+  const temps=todayE.map(t=>t.temp);
+  const hi=temps.length?Math.max(...temps):cl.temp;
+  const lo=temps.length?Math.min(...temps):cl.temp;
+  document.getElementById('wwIcon').textContent=WI[cl.code]||'🌡️';
+  document.getElementById('wwTemp').textContent=cl.temp+'°';
+  document.getElementById('wwRange').textContent=`${lo}° / ${hi}°`;
+  document.getElementById('wwDesc').textContent=WT[cl.code]||'';
+  document.getElementById('wwWind').textContent=`💨 ${cl.wind} m/s`;
+}
+
+function renderWeatherExpanded(ts){
+  const now=new Date();
+  const days=[];
+  for(let di=0;di<7;di++){
+    const tg=new Date(now); tg.setDate(tg.getDate()+di); tg.setHours(0,0,0,0);
+    const dStr=tg.toDateString();
+    const dE=ts.filter(t=>t.time.toDateString()===dStr);
+    if(!dE.length) continue;
+    const temps=dE.map(t=>t.temp);
+    const midE=dE.find(t=>{const h=t.time.getHours();return h>=11&&h<=14;})||dE[0];
+    // Today: next hour, +1h, +3h, +3h. Other days: fixed 7/10/13/16.
+    let hourlyHours;
+    if(di===0){
+      const nextH=now.getHours()+1; // next full hour
+      hourlyHours=[nextH, nextH+1, nextH+4, nextH+7];
+    } else {
+      hourlyHours=[7,10,13,16];
+    }
+    const hourly=hourlyHours.map(h=>{
+      const tgt=new Date(tg); tgt.setHours(h,0,0,0);
+      let best=dE[0];
+      for(const t of dE){if(Math.abs(t.time-tgt)<Math.abs(best.time-tgt))best=t;}
+      return{h:String(best.time.getHours()).padStart(2,'0'),icon:WI[best.code]||'🌡️',temp:best.temp};
+    });
+    const name=di===0?'Idag':di===1?'Imorgon':WEEKDAYS[tg.getDay()];
+    days.push({name,icon:WI[midE.code]||'🌡️',desc:WT[midE.code]||'',hi:Math.max(...temps),lo:Math.min(...temps),hourly});
+  }
+  document.getElementById('weatherExpandedContent').innerHTML=days.map(d=>`
+    <div class="we-day-block">
+      <div class="we-day-row">
+        <span class="we-day-name">${d.name}</span>
+        <span class="we-day-icon">${d.icon}</span>
+        <span class="we-day-range">${d.lo}° / ${d.hi}°</span>
+        <span class="we-day-desc">${d.desc}</span>
+      </div>
+      <div class="we-hourly">${d.hourly.map(h=>`<div class="we-h"><div class="we-h-time">${h.h}</div><div class="we-h-icon">${h.icon}</div><div class="we-h-temp">${h.temp}°</div></div>`).join('')}</div>
+    </div>`).join('');
+}
+
+function toggleWeather(){
+  const el=document.getElementById('weatherExpanded');
+  const open=el.classList.toggle('open');
+  clearTimeout(weatherCloseTimer);
+  if(open){
+    if(lastTs){
+      renderWeatherExpanded(lastTs);
+    } else {
+      document.getElementById('weatherExpandedContent').innerHTML='<div style="color:#8b949e;padding:8px">Hämtar väder...</div>';
+      fetchWeather();
+    }
+    weatherCloseTimer=setTimeout(()=>el.classList.remove('open'),2*60*1000);
+  }
+}
+
+fetchWeather(); setInterval(fetchWeather,CONFIG.weatherRefreshMs);
+
+// ===== TRANSIT =====
+async function fetchTransit(){
+  try{
+    const r=await fetch(`https://transport.integration.sl.se/v1/sites/${CONFIG.slSiteId}/departures`);
+    const d=await r.json(); renderTransit(d.departures||[]);
+  }catch(e){document.getElementById('transitList').innerHTML='<div style="color:#8b949e;padding:4px;font-size:0.8rem">Kunde inte ladda</div>';}
+}
+
+function hardRefreshTransit(){
+  document.getElementById('transitList').innerHTML='<div style="color:#8b949e;padding:4px;font-size:0.8rem">Laddar om...</div>';
+  document.getElementById('transitDeviation').textContent='';
+  setTimeout(fetchTransit,300);
+}
+
+function renderTransit(deps){
+  // Filter: only tunnelbana (green line 19), exclude southbound (Hagsätra)
+  const nb=deps.filter(d=>{
+    if(!d.line||!d.destination) return false;
+    const mode=(d.line.transport_mode||d.line.transportMode||'').toUpperCase();
+    const desig=String(d.line.designation||d.line.id||'');
+    // Match METRO transport mode OR explicit line 19
+    const isMETRO=mode==='METRO'||mode==='TUNNELBANA'||desig==='19';
+    const notSouth=!d.destination.toLowerCase().includes('hagsätra');
+    return isMETRO&&notSouth;
+  }).slice(0,5);
+  if(!nb.length){document.getElementById('transitList').innerHTML='<div style="color:#8b949e;padding:4px;font-size:0.8rem">Inga avgångar</div>';return;}
+  document.getElementById('transitList').innerHTML=nb.map(d=>{
+    const disp=d.display||'?';
+    const soon=disp.toLowerCase().includes('nu')||(parseInt(disp)<=3&&!isNaN(parseInt(disp)));
+    const lineLabel=d.line?.designation||d.line?.id||'19';
+    return `<div class="transit-row"><div class="transit-line">${lineLabel}</div><div class="transit-dest">${d.destination||'T-centralen'}</div><div class="transit-time ${soon?'soon':''}">${disp}</div></div>`;
+  }).join('');
+  const devs=[...new Set(deps.flatMap(d=>(d.deviations||[]).map(x=>x.message)).filter(Boolean))];
+  document.getElementById('transitDeviation').textContent=devs.slice(0,2).join(' · ');
+}
+fetchTransit(); setInterval(fetchTransit,CONFIG.transitRefreshMs);
+
+// ===== CALENDAR =====
+let calAutoClose=null;
+function openCalFull(){
+  const iframe=document.getElementById('calFullIframe');
+  iframe.src='https://calendar.google.com/calendar/embed?src=niklasjonsson89%40hotmail.com&ctz=Europe%2FStockholm&hl=sv&showTitle=0&showNav=1&showPrint=0&showTabs=0&showCalendars=0&mode=MONTH';
+  document.getElementById('calFullscreen').classList.add('open');
+  clearTimeout(calAutoClose);
+  calAutoClose=setTimeout(closeCalFull,2*60*1000);
+}
+function closeCalFull(){
+  clearTimeout(calAutoClose);
+  document.getElementById('calFullscreen').classList.remove('open');
+  document.getElementById('calFullIframe').src='';
+}
+
+// ===== FUN FACTS =====
+const FUN_FACTS=[
+  // ── Batch 1 (original 80) ──
+  {cat:'Kroppen',text:'Hjärnan förbrukar ca 20% av kroppens energi, trots att den bara väger ~2%.',extra:'Hjärnan behöver konstant energi för att upprätthålla elektriska signaler mellan 86 miljarder nervceller. Även när du sover arbetar hjärnan hårt — den rensar ut avfallsprodukter och konsoliderar minnen. Barn under 5 år kan använda upp till 50% av sin energi på hjärnan.'},
+  {cat:'Kroppen',text:'Dina ben är starkare än stål i samma vikt.',extra:'Benvävnad tål ett tryck på ca 170 MPa — ungefär lika starkt som stål, men mycket lättare. Skelettet förnyas ständigt: var tionde år har du i princip ett helt nytt skelett.'},
+  {cat:'Kroppen',text:'Du är lite längre på morgonen än på kvällen.',extra:'Under natten expanderar broskskivorna mellan ryggkotorna. Du kan vara upp till 2 cm längre på morgonen. Under dagen komprimeras skivorna igen av din kroppsvikt.'},
+  {cat:'Kroppen',text:'Din kropp byter ut nästan alla celler på 7–10 år.',extra:'Tarmcellerna byts ut var 3–5 dag, hudcellerna var 2–3 vecka. Hjärnceller och ögats lins är undantag — många av dem har du hela livet.'},
+  {cat:'Djur',text:'Kor har bästa vänner och blir stressade när de skiljs åt.',extra:'Forskning visade att kor har lägre hjärtfrekvens och kortisol-nivå när de är med sin bästa vän. De kan känna igen över 100 andra kor i ansiktet.'},
+  {cat:'Djur',text:'Humlan flyger trots att den "inte borde kunna" — enligt gammal aerodynamik.',extra:'Myten kommer från en beräkning på 1930-talet. I verkligheten rör humlan vingarna i en komplex 8-rörelse som skapar virvelströmmar.'},
+  {cat:'Natur',text:'Träd "pratar" via svampnätverk i marken — "Wood Wide Web".',extra:'Mykorrhiza-svampar bildar nätverk och kan transportera socker, vatten och varningssignaler. Ett moderträd kan skicka näring till sina plantor i skuggan.'},
+  {cat:'Djur',text:'Valar har egna dialekter beroende på var de lever.',extra:'Kaskeloter i Karibien har annorlunda klickserier än de i Stilla havet. En vals sång kan höras upp till 3 000 km bort.'},
+  {cat:'Rymden',text:'En dag på Venus är längre än ett år på Venus!',extra:'Venus roterar extremt långsamt (243 jorddygn per varv) men kretsar runt solen på bara 225 jorddygn. Dessutom roterar den baklänges.'},
+  {cat:'Natur',text:'Det finns fler träd på jorden (~3 biljoner) än stjärnor i Vintergatan.',extra:'En studie från Yale 2015 uppskattade 3,04 biljoner träd. Vi förlorar ca 10 miljarder träd per år.'},
+  {cat:'Historia',text:'Kleopatra levde närmare månlandningen i tid än pyramidernas byggande.',extra:'Cheopspyramiden: ca 2560 f.Kr. Kleopatra: 30 f.Kr. Apollo 11: 1969. Pyramiderna var antika för henne!'},
+  {cat:'Historia',text:'Vikingar hade katter ombord på sina skepp.',extra:'Katter skyddade matförråden. DNA-analys visar att vikingarna spred kattarten från Egypten till Nordeuropa.'},
+  {cat:'Historia',text:'Sverige hade vänstertrafik ända till 1967.',extra:'Dagen H: 3 september 1967, kl 04:50. Ironiskt nog ägde färre olyckor rum dagarna efter bytet.'},
+  {cat:'Teknik',text:'Din mobil är kraftfullare än datorerna som tog oss till månen.',extra:'Apollo 11:s dator hade 74 KB minne och körde på 0,043 MHz. En modern smartphone har miljontals gånger mer processorkraft.'},
+  {cat:'Teknik',text:'Mikrovågsugnen uppfanns av en slump.',extra:'1945 stod ingenjören Percy Spencer nära en magnetron och märkte att chokladkakan i fickan smälte. Den första mikrovågsugnen vägde 340 kg.'},
+  {cat:'Teknik',text:'Det finns fler möjliga schackpartier än atomer i universum.',extra:'Shannon-talet: ca 10^120. Universumets atomer: ca 10^80. Schack är fortfarande olöst av datorer.'},
+  {cat:'Mat',text:'Bananer är tekniskt sett bär — men jordgubbar är det inte!',extra:'Botaniskt sett är ett bär en frukt från en enda blomma med frön inbäddade i fruktköttet. Bananer och avokado räknas som bär.'},
+  {cat:'Mat',text:'Honung blir aldrig gammal — den håller i tusentals år!',extra:'3 000 år gammal honung från egyptiska gravar var fortfarande ätbar. Honungens låga vattenhalt och naturliga väteperoxid gör den bakteriefri.'},
+  {cat:'Mat',text:'Morötter var ursprungligen lila!',extra:'De första odlade morötterna i Afghanistan var lila och gula. Orange morötter odlades i Nederländerna på 1600-talet som hyllning till Vilhelm av Oranien.'},
+  {cat:'Mat',text:'Kaffe är världens näst mest handlade råvara — efter olja.',extra:'Över 2,25 miljarder koppar kaffe dricks varje dag. Finland dricker mest kaffe per capita: ~12 kg per person och år.'},
+  {cat:'Psykologi',text:'Hjärnan fyller i tomrum i dina minnen — utan att du märker det.',extra:'Fenomenet kallas "konfabulering". Ögonvittnens minnen har visat sig vara förvånansvärt opålitliga.'},
+  {cat:'Psykologi',text:'Musik kan minska upplevd smärta.',extra:'Patienter som lyssnade på musik efter operation behövde signifikant mindre smärtstillande. Lugn musik (60–80 BPM) sänker pulsen och blodtrycket.'},
+  {cat:'Psykologi',text:'Vi tror alla att andra tänker på oss mer än de gör.',extra:'Spotlight-effekten: folk trodde 50% märkte deras pinsamma t-shirt. I verkligheten: under 25%.'},
+  {cat:'Djur',text:'Bläckfiskar har tre hjärtan och blått blod.',extra:'Blodet är blått pga kopparbaserat hemocyanin. De har dessutom 9 hjärnor (1 central + 1 i varje arm).'},
+  {cat:'Rymden',text:'En tesked neutronstjärna väger ca 6 miljarder ton.',extra:'En neutronstjärna kan ha massan av 1–2 solar men vara bara 20 km i diameter. De kan rotera 700 varv per sekund.'},
+  {cat:'Rymden',text:'Jorden är inte rund — den är lite tillplattad vid polerna.',extra:'Jordens rotation gör att ekvatorn buktar ut ca 43 km. Chimborazo-vulkanen i Ecuador är närmast rymden.'},
+  {cat:'Djur',text:'Delfiner sover med ena hjärnhalvan i taget.',extra:'De måste vara medvetna för att andas. Ena halvan sover medan den andra håller vakt.'},
+  {cat:'Natur',text:'Det finns mer vatten i jordens mantel än i alla hav kombinerat.',extra:'Mineralen ringwoodit kan binda enorma mängder vatten i sin kristallstruktur.'},
+  {cat:'Teknik',text:'Wi-Fi står inte för "Wireless Fidelity".',extra:'Interbrand bekräftade att det inte betyder något. Frasen "Wireless Fidelity" var aldrig den officiella betydelsen.'},
+  {cat:'Psykologi',text:'Lukter är starkast kopplade till minnen.',extra:'Luktsinnet kopplas direkt till amygdala och hippocampus — "Proust-effekten".'},
+  {cat:'Sverige',text:'Sverige är ett av världens mest skogsrika länder — 70% täcks av skog.',extra:'Sverige har ca 28 miljoner hektar skogsmark. Det planteras fler träd än som avverkas sedan decennier.'},
+  {cat:'Sverige',text:'IKEA-grundaren Ingvar Kamprad startade sitt företag som 17-åring.',extra:'IKEA grundades 1943. Namnet är en akronym: Ingvar Kamprad, Elmtaryd, Agunnaryd.'},
+  {cat:'Sverige',text:'Svenska är officiellt språk i både Sverige och Finland.',extra:'Finlandssvenska talas av ca 5% av Finlands befolkning. Åland är enspråkigt svenskt.'},
+  {cat:'Djur',text:'Flamingos är rosa för att de äter räkor och alger.',extra:'Flamingos föds vita. Pigmentet karotenoid i födan absorberas och lagras i fjädrarna.'},
+  {cat:'Djur',text:'Elefanter håller ceremonier för sina döda.',extra:'Elefanter besöker döda flockmedlemmars ben, sniffar på dem och verkar "sörja". De bär ibland på benen i flera dagar.'},
+  {cat:'Rymden',text:'Det tar 8 minuter och 20 sekunder för solljus att nå jorden.',extra:'Om solen slocknade skulle vi inte märka det på 8 minuter. Ljuset från närmaste stjärna tar 4,2 år.'},
+  {cat:'Rymden',text:'Saturnus är så lätt att den skulle flyta i vatten.',extra:'Saturnus medelsdensitet: 0,687 g/cm³ (vatten: 1 g/cm³). Ringarna sträcker sig 282 000 km men är bara meter tjocka.'},
+  {cat:'Natur',text:'Blixt är fem gånger hetare än solens yta.',extra:'En blixt når ~30 000 K (solens yta: ca 5 500 K). Varje sekund slår ca 100 blixtar ner på jordens yta.'},
+  {cat:'Natur',text:'Det finns en svamp i Oregon som är världens största organism — 9 km² stor.',extra:'Armillaria ostoyae uppskattas vara 8 650 år gammal och väger ca 600 ton.'},
+  {cat:'Historia',text:'Ryssland sålde Alaska till USA för 7,2 miljoner dollar 1867.',extra:'Det var ca 2 cent per hektar. Kallas "Sewards Dårskap" — ändrade syn när man hittade guld.'},
+  {cat:'Historia',text:'Napoleon var inte speciellt kort.',extra:'Napoleon var ca 168 cm, genomsnittligt för en fransman på 1800-talet. Myten uppstod ur brittisk propaganda.'},
+  {cat:'Historia',text:'Oxford Universitetet är äldre än Aztekerriket.',extra:'Oxford: ca 1096–1167. Aztekerriket: ca 1428. Oxford är alltså över 200 år äldre.'},
+  {cat:'Kroppen',text:'Fingeravtryck är unika — även hos identiska tvillingar.',extra:'DNA bestämmer grundmönstret, men de exakta vrickorna formas av slumpmässiga faktorer i livmodern.'},
+  {cat:'Kroppen',text:'Tarmbakterierna väger ~1,5 kg och är fler än dina egna celler.',extra:'Ca 38 biljoner bakterier i tarmen, ca 30 biljoner mänskliga celler. Påverkar immunförsvaret, humöret och ämnesomsättningen.'},
+  {cat:'Kroppen',text:'Du blinkar ~15–20 gånger per minut, men nästan aldrig mitt i en mening.',extra:'Blinkandet koordineras med naturliga pauser i tal. Under intensivt fokus blinkar vi upp till 60% mindre.'},
+  {cat:'Teknik',text:'Den första datorbugg var en riktig insekt.',extra:'1947 hittade Grace Hopper en nattfjäril inkilad i ett relä i Harvard Mark II-datorn.'},
+  {cat:'Teknik',text:'YouTube laddas upp ca 500 timmar video varje minut.',extra:'Om du försökte titta på allt som laddas upp på en dag skulle det ta ca 82 år.'},
+  {cat:'Mat',text:'Jordnötter är baljväxter, inte nötter.',extra:'Jordnötter tillhör baljväxtfamiljen tillsammans med ärtor, linser och bönor.'},
+  {cat:'Mat',text:'Ägg innehåller alla essentiella aminosyror som kroppen behöver.',extra:'Ägg anses vara det "perfekta proteinet". Gulan innehåller fett, A-vitamin, D-vitamin, B12 och kolin.'},
+  {cat:'Psykologi',text:'Vi fattar de flesta beslut omedvetet — och hittar på skäl efteråt.',extra:'Hjärnan förbereder en rörelse upp till 0,5 sek INNAN vi är medvetna om beslutet.'},
+  {cat:'Psykologi',text:'"Flow" — total koncentration — är kroppens naturliga belöning.',extra:'Mihaly Csikszentmihalyi: när utmaningen matchar förmågan försvinner tidsuppfattningen och dopamin frisätts.'},
+  {cat:'Djur',text:'Krokodiler överlevde dinosaurieutrotningen relativt oförändrade.',extra:'De har funnits i ca 200 miljoner år. De är faktiskt närmast besläktade med fåglar bland nutida djur.'},
+  {cat:'Djur',text:'Getter har rektangulära pupiller för att se runt om sig.',extra:'Den ovala pupillen ger ett synfält på ~340°. Den roterar automatiskt horisontellt när djuret böjer ner huvudet.'},
+  {cat:'Natur',text:'Hajen är äldre som art än Saturnus ringar.',extra:'Hajar: ca 450 miljoner år. Saturnus ringar bildades för bara 10–100 miljoner år sedan.'},
+  {cat:'Natur',text:'Regnbågar är egentligen runda cirklar — vi ser bara halvan.',extra:'Från ett flygplan kan man se hela cirkeln. Varje person ser en unik regnbåge baserad på sin position.'},
+  {cat:'Historia',text:'Egyptierna använde inte kameler för att bygga pyramiderna.',extra:'Kameler domesticerades 1000 f.Kr. — 1500 år EFTER Cheopspyramiden. Pyramiderna byggdes med organiserade arbetslag.'},
+  {cat:'Teknik',text:'QR-koder uppfanns 1994 för att spåra bildelar i Japan.',extra:'Denso Wave skapade QR-koden för Toyota. De valde att göra uppfinningen fri att använda utan patent.'},
+  {cat:'Teknik',text:'Den första webbsidan finns fortfarande online.',extra:'Tim Berners-Lee skapade den 6 augusti 1991 på CERN. Adressen http://info.cern.ch är fortfarande tillgänglig.'},
+  {cat:'Kroppen',text:'Du producerar ca 1–2 liter saliv per dag.',extra:'Saliven startar matsmältningen. Utan saliv kan man inte smaka mat — smakämnen måste lösas i vätska.'},
+  {cat:'Sverige',text:'Sverige har fler öar än något annat land i Europa — ca 221 800.',extra:'Stockholm skärgård ensam har 30 000 öar. Finlands ~188 000 öar gör det till tvåa.'},
+  {cat:'Mat',text:'Choklad var ursprungligen en dryck — och bitter.',extra:'Mayakulturen drack kakao med vatten och chili. Mjölkchokladen skapades 1875 i Schweiz.'},
+  {cat:'Djur',text:'Pingviner friar med en speciell sten.',extra:'Manliga Adeliepingviner letar efter den perfekta stenen och presenterar den för honan som ett frieri.'},
+  {cat:'Rymden',text:'Rymden luktar bränt metall och stekt kött.',extra:'Astronauter beskriver lukten på dräkter efter rymdpromenader som "bränt metall" och "varmsvetsning".'},
+  {cat:'Natur',text:'En honungsbis vingar slår 200 gånger per sekund och producerar tonen A.',extra:'Det är exakt A (440 Hz) — den internationella stämtonen för orkestrar.'},
+  {cat:'Psykologi',text:'Att skriva för hand ökar inlärning bättre än att skriva på dator.',extra:'Forskning (Princeton 2014): handskrift kräver bearbetning och sammanfattning, inte bara avskrift.'},
+  {cat:'Historia',text:'Post-it-lappen uppfanns av misstag — ingen ville ha den i 5 år.',extra:'Spencer Silver skapade 1968 ett "misslyckat" lim. 3M lanserade det 1980 — storsäljare.'},
+  {cat:'Kroppen',text:'Hjärtat slår ca 100 000 gånger om dagen — och pumpar 7 600 liter blod.',extra:'Under ett 70-årigt liv slår hjärtat ca 2,5 miljarder gånger. Det kan slå utanför kroppen med syre.'},
+  {cat:'Natur',text:'Isbjörnar har svart hud — inte vit.',extra:'Pälsen är genomskinlig och verkar vit pga ljusreflexion. Under pälsen är huden svart för att absorbera solenergi.'},
+  {cat:'Teknik',text:'GPS fungerar tack vare Einsteins relativitetsteori.',extra:'Utan relativitetskorrigering av satellitklockornas tidsdilatation skulle GPS driva ca 10 km per dag.'},
+  {cat:'Mat',text:'Varm mat luktar mer — och smakar mer — än kall mat.',extra:'Flyg-mat upplevs som smaklös delvis för att kabinluften dämpar luktsinnet med 20–30%.'},
+  {cat:'Djur',text:'Råttor skrattar — men på ultraljud vi inte kan höra.',extra:'Råttor avger 50 kHz-läten när de leks och kittlas. De söker aktivt upp kittling.'},
+  {cat:'Historia',text:'Den kinesiska muren är inte synlig från rymden med blotta ögat.',extra:'NASA-astronauten Ed Lu bekräftade 2003 att han inte kunde se den. Muren är bara ~5 meter bred.'},
+  {cat:'Rymden',text:'Marsens solnedgångar är blå.',extra:'Järnoxiddamm gör himmelen rödaktig på dagen, men finpartiklarna sprider blått ljus vid solnedgång.'},
+  {cat:'Sverige',text:'Alfred Nobel uppfann dynamiten och ångrade sig djupt.',extra:'Nobel uppfann dynamit 1867. Chockad av sitt rykte testamenterade han sin förmögenhet till Nobelpriset.'},
+  {cat:'Psykologi',text:'Kronisk ensamhet är lika skadligt som att röka 15 cigaretter om dagen.',extra:'Social isolering ökar dödlighetsrisken med 29%. Ensamhet triggar samma smärtcentra som fysisk smärta.'},
+  {cat:'Kroppen',text:'Nästan alla föredrar sin spegelbild framför ett foto av sig själva.',extra:'Vi är mest bekanta med spegelbilden. Vänner föredrar omvänt det "rätta" fotot.'},
+  {cat:'Natur',text:'Havsvatten lyser i mörkret — på grund av plankton.',extra:'Dinoflagellater bioluminescerar vid störning. Havet kan lysa blått i strålar från båtar på natten.'},
+  {cat:'Historia',text:'Lego är världens största lekmedelstillverkare räknat i antal.',extra:'LEGO producerar ca 36 miljarder klossar per år. Klossar från 1958 passar fortfarande med dagens — toleransen är under 0,002 mm.'},
+  {cat:'Teknik',text:'Velcro uppfanns efter en promenad med hunden.',extra:'1941 märkte George de Mestral att kardborrfrön fastnat i hundens päls. Velcro patenterades 1955 och NASA använde det tidigt.'},
+
+  // ── Batch 2 (80 nya fakta) ──
+  {cat:'Kroppen',text:'Ditt DNA skulle sträcka sig till Pluto och tillbaka om det lades ut.',extra:'Varje cell innehåller ca 2 meter DNA. Med 37 biljoner celler blir det ca 74 miljarder km — 500 gånger till Pluto och tillbaka.'},
+  {cat:'Kroppen',text:'Din näsa kan känna igen en biljon olika lukter.',extra:'En studie från 2014 (Science) visade att vi kan skilja åt minst 1 000 000 000 000 lukter — långt mer än de 10 000 som var standardsvaret.'},
+  {cat:'Djur',text:'Koalan har fingeravtryck som är nästan omöjliga att skilja från människans.',extra:'Koalans fingeravtryck är så lika människans att de vid ett tillfälle förvirrade australiensisk polis vid en brottsscen.'},
+  {cat:'Djur',text:'En flock flamingos kallas en "flamboyance".',extra:'Liksom lejon bildar en "pride" och björnar en "sleuth" har flamingos det poetiska samlingsnamnet flamboyance.'},
+  {cat:'Natur',text:'Det sker ca 100 blixtar per sekund globalt.',extra:'Det betyder ca 8,6 miljoner blixtar per dag. En enda blixt innehåller nog energi för att lysa en 100-watts glödlampa i ca tre månader.'},
+  {cat:'Historia',text:'Det tog 600 år att bygga Kölnerdomen.',extra:'Bygget startade 1248 och avslutades 1880 — med en paus på 300 år. Den var världens högsta byggnad 1880–1884.'},
+  {cat:'Historia',text:'Det första fotografiet tog 8 timmars exponering.',extra:'Joseph Niépces foto (1826–27) krävde ca 8 timmars exponering. Solen hann röra sig, varför det ser ut som om ljuset faller från båda håll.'},
+  {cat:'Teknik',text:'Ctrl+Z (ångra) uppfanns på 1970-talet och revolutionerade datoranvändning.',extra:'Larry Tesler och Tim Mott uppfann undo/redo på Xerox PARC runt 1974. Utan det hade datorer aldrig blivit lika tillgängliga.'},
+  {cat:'Mat',text:'Pizza Margherita uppfanns 1889 för att hedra Italiens drottning.',extra:'Raffaele Esposito i Neapel skapade en pizza med tomatsås, mozzarella och basilika — Italiens flaggfärger. Brevet från drottningen är bevarat.'},
+  {cat:'Rymden',text:'Voyager 1 är det mänskliga objekt som färdats längst bort från Jorden.',extra:'Voyager 1 passerade heliosfären 2012 och befinner sig nu i interstellärt rymden. Signalen tar ~22 timmar att nå oss.'},
+  {cat:'Kroppen',text:'Du har fler bakterier i munnen än det finns människor på Jorden.',extra:'Munnen hyser ca 6–10 miljarder bakterier av över 700 olika arter. De flesta är ofarliga eller nyttiga.'},
+  {cat:'Djur',text:'Sjöhästhannen bär och föder ungen.',extra:'Honan lägger äggen i hannens buksäck. Hannen befruktar dem och bär ungarna 2–6 veckor. Han kan föda upp till 2 000 ungar på en gång.'},
+  {cat:'Natur',text:'Floder meandrar alltid — det är ett ofrånkomligt fysikfenomen.',extra:'En liten böjning ökar flödesskillnader som förstärker böjningen ytterligare. Inga raka floder existerar naturligt i naturen.'},
+  {cat:'Psykologi',text:'Hjärnan kan inte skilja på levande upplevelse och stark fantasi.',extra:'fMRI-studier visar att föreställning och faktisk upplevelse aktiverar i stort sett samma hjärnregioner.'},
+  {cat:'Sverige',text:'Systembolaget är en av världens fem största vinköpare.',extra:'Monopolet syfte är att minska alkoholskador. Sverige har trots monopolet lägre alkoholkonsumtion än många länder utan det.'},
+  {cat:'Geografi',text:'Australien är bredare än månen.',extra:'Australien är ca 4 000 km brett. Månens diameter är ca 3 474 km. Australien är alltså ~500 km bredare.'},
+  {cat:'Teknik',text:'Den ursprungliga iPhone var designad för en stylus — inte fingrar.',extra:'Steve Jobs pressade teamet att byta till multi-touch. Han presenterade iPhone som "en iPod, en telefon och en internetsurfare".'},
+  {cat:'Mat',text:'Sushi i sin ursprungsform var fermenterad fisk, inte rå.',extra:'Narezushi fermenterades i månader. Under Edo-perioden (1603–1868) uppfanns Edo-mae — rå fisk på ris. Sushi är bara ~200 år gammalt.'},
+  {cat:'Natur',text:'Pollenkornet kan överleva i miljoner år i sediment.',extra:'Palynologi, vetenskapen om pollen, används för att spåra historiskt klimat och växtlighet. Pollen kan identifieras tusentals år senare.'},
+  {cat:'Djur',text:'Myror kan lyfta 50 gånger sin kroppsvikt.',extra:'Relativt sett är det som om en människa bar 5 ton. Myrors muskler utgör proportionellt mycket mer av kroppen än hos ryggradsdjur.'},
+  {cat:'Rymden',text:'Svarta hål avger faktiskt strålning — de är inte helt "svarta".',extra:'Stephen Hawking förutsade 1974 att svarta hål avger termisk Hawkingstrålning. De avdunstar till slut — men extremt långsamt.'},
+  {cat:'Historia',text:'Abraham Lincoln var en mästarbrottare.',extra:'Lincoln förlorade bara ett av sina ~300 brottningsmatcher. 1992 hedrades han av National Wrestling Hall of Fame.'},
+  {cat:'Teknik',text:'E-postens "@"-symbol valdes av misstag — men satt fast.',extra:'Ray Tomlinson valde @-tecknet 1971 för att det aldrig förekom i användarnamn. Nu används det av 4 miljarder människor.'},
+  {cat:'Kroppen',text:'Mänskliga tänder är lika hårda som hajtänder.',extra:'Tandemalje — kroppens hårdaste ämne — har hårdhet 5 på Mohs skala, jämförbart med hajtänder. Vi har dock bara två uppsättningar.'},
+  {cat:'Natur',text:'Solnedgångarna på Uranus är gröna.',extra:'Uranus blå färg orsakas av metan. Vid solnedgång ger samma metan ett grönt sken. Uranus axel lutar 98 grader — den roterar på sidan.'},
+  {cat:'Psykologi',text:'Sova på saken fungerar verkligen för kreativt tänkande.',extra:'Under REM-sömn associeras distanta minnen på nya sätt. Studier visar 30–40% bättre problemlösning efter sömn.'},
+  {cat:'Sverige',text:'ABBA The Museum har fler besökare per år än många stora europeiska museer.',extra:'ABBA är det mest framgångsrika musikexportprojektet i Skandinavien. Mamma Mia är näst mest spelade musikalen på West End.'},
+  {cat:'Historia',text:'Den romerska kalendern hade ursprungligen bara 10 månader.',extra:'Därför heter september (7), oktober (8), november (9) och december (10) vad de heter. Januari och februari lades till ca 713 f.Kr.'},
+  {cat:'Djur',text:'Lodjuret kan höra en mus under 30 cm snö.',extra:'Lodjurets öron har högrörliga tofsar som fungerar som riktantenner och kan lokalisera ljud exakt i tre dimensioner.'},
+  {cat:'Teknik',text:'QWERTY-tangentbordet är designat för att bromsa skrivandet.',extra:'På 1870-talet fastnade mekaniska skrivmaskiner om man slog för snabbt. Sholes designade QWERTY för att separera vanliga bokstavspar.'},
+  {cat:'Mat',text:'Koffein är världens mest konsumerade psykoaktiva ämne, bortsett från vatten.',extra:'Ca 80% av alla vuxna konsumerar koffein dagligen. Det blockerar adenosinreceptorer och hämmar trötthetssignalerna.'},
+  {cat:'Rymden',text:'Utifrån sett verkar ett föremål som faller in i ett svart hål aldrig nå det.',extra:'Pga tidsdilatation ser en utomstående observatör föremålet sakta ner och frysa vid händelsehorisonten — men det faller faktiskt igenom.'},
+  {cat:'Kroppen',text:'Hjärtat är inte till vänster — det lutar bara ditåt.',extra:'Hjärtat är centrerat men lutar med spetsen mot vänster. Dextrokardia, där det pekar höger, är sällsynt — ca 1 på 12 000.'},
+  {cat:'Natur',text:'Jordbävningar på månen kan pågå i timmar.',extra:'Till skillnad från jordbävningar som varar sekunder, kan månbävningar pågå upp till en timme — månen saknar vatten som dämpar rörelserna.'},
+  {cat:'Historia',text:'Winston Churchill vann Nobelpriset i litteratur — inte i fred.',extra:'Churchill fick litteraturpriset 1953 för sina historiska skrifter och tal. Han nominerades till fredspriset fem gånger men vann aldrig det.'},
+  {cat:'Psykologi',text:'Det tar 66 dagar, inte 21, att bilda en vana.',extra:'Myten om 21 dagar kommer från en plastikkirurg på 1950-talet. Forskning (UCL, 2010) visade att genomsnittstiden är 66 dagar.'},
+  {cat:'Sverige',text:'Pippi Långstrump fick avslag från förlaget Bonnier.',extra:'Astrid Lindgren skickade manuset 1944 — Bonniers tackade nej. Rabén & Sjögren publicerade 1945. Nu översatt till 77 språk.'},
+  {cat:'Djur',text:'Fiskar kan drunkna — om vattnet saknar syre.',extra:'Om vattentemperaturen är för hög eller vid algblomning kan fiskar drunkna av syrebrist. Det kallas hypoxi.'},
+  {cat:'Teknik',text:'Bluetooth är uppkallat efter en dansk vikingakung.',extra:'Harald Blåtand enade danska stammar på 900-talet. Bluetooth-logotypen är hans initialer i runor.'},
+  {cat:'Geografi',text:'Kanada har längre kust än något annat land — nästan 250 000 km.',extra:'Kanada har också fler sjöar än alla andra länder kombinerat — ca 2 miljoner sjöar.'},
+  {cat:'Mat',text:'Äpplet och rosen tillhör samma familj — Rosaceae.',extra:'Rosenfamiljen inkluderar äpplen, päron, plommon, körsbär, mandlar, jordgubbar och hallon.'},
+  {cat:'Kroppen',text:'Hörseln försvinner sist av alla sinnen när man dör.',extra:'Döende människor kan höra när de inte längre kan reagera. Det är också bland de sista sinnen som stängs av under narkos.'},
+  {cat:'Historia',text:'Kleopatra talade nio språk.',extra:'Kleopatra var den första ptolemäiska faraonen som talade egyptiska. Hennes förfäder regerade i 300 år utan att lära sig landets språk.'},
+  {cat:'Rymden',text:'Materia är till 99,9999999999999% tomt rum.',extra:'Om en atomkärna var stor som en golfboll, skulle elektronerna kretsa på en radie av ca 3 km. Det "hårda" är bara elektromagnetiska krafter.'},
+  {cat:'Djur',text:'Kameleonter ändrar färg för kommunikation — inte för kamouflage.',extra:'Färgskiftningens primära funktion är social kommunikation: dominans, parning och temperaturreglering. Kamouflage är sekundärt.'},
+  {cat:'Natur',text:'Bambu är inte ett träd — det är världens snabbast växande växt.',extra:'Bambu är en gräsart. Jätteambusen kan växa 91 cm på en enda dag. Bambu blommar bara vart 60–130 år.'},
+  {cat:'Psykologi',text:'Att le gör dig faktiskt gladare — "penneffekten".',extra:'Folk som höll en penna med tänderna (tvingade ett leende) uppfattade tecknade serier som roligare. Hjärnan läser av ansiktsmuskler.'},
+  {cat:'Sverige',text:'Sverige har världens äldsta centralbank — Riksbanken, grundad 1668.',extra:'Riksbanken grundades 26 år före Bank of England. Under 2023 använde under 10% av betalningar i Sverige kontanter.'},
+  {cat:'Geografi',text:'Antarktis är världens största öken.',extra:'En öken definieras av låg nederbörd. Antarktis får under 200 mm/år, Sahara ca 250 mm. Antarktis är 14,2 miljoner km² — dubbelt så stor som Sahara.'},
+  {cat:'Historia',text:'Det gamla biblioteket i Alexandria förstördes gradvis, inte i en enda brand.',extra:'Myten om Caesars brand är delvis sann, men biblioteket förföll snarare under flera sekler. Det slutliga slutet skedde troligen 300–600 e.Kr.'},
+  {cat:'Teknik',text:'Den ursprungliga "surfplattan" konceptualiserades 1968 — 42 år före iPad.',extra:'Alan Kay på Xerox PARC skapade "Dynabook" 1968: en bärbar dator med pekskärm för barn.'},
+  {cat:'Djur',text:'Ormar "luktar" med sin tunga.',extra:'Ormarnas kluvna tunga samlar luftpartiklar. Jacobsons organ i gommen analyserar dem. Den kluvna formen avgör doftspårets riktning.'},
+  {cat:'Natur',text:'Äldre träd hjälper yngre träd att överleva i skuggan.',extra:'"Moderträd" skickar kolhydrater via mykorrhizanätverk till plantor i skuggan. Planttillväxten minskade med 20% när moderträdet avlägsnades.'},
+  {cat:'Kroppen',text:'Du ser med din hjärna, inte dina ögon.',extra:'Ögonen registrerar ljus. Det är hjärnans syncortex som skapar bilden. Halva hjärnans cortex är involverad i synbearbetning.'},
+  {cat:'Rymden',text:'Månen rör sig bort från Jorden med ca 3,8 cm per år.',extra:'Månen saktar jordens rotation. Om 600 miljoner år kommer totala solförmörkelser att vara omöjliga — månen blir för liten.'},
+  {cat:'Historia',text:'De olympiska spelen avbröts i 1 500 år.',extra:'Antika OS hölls från 776 f.Kr. till 393 e.Kr. Pierre de Coubertin återupplivade dem 1896 i Aten.'},
+  {cat:'Mat',text:'Wasabi på restaurang är troligen inte riktig wasabi.',extra:'Riktig wasabi kostar tusentals kronor per kg. Det gröna pastet är vanligen pepparrot med grön färgning. Verklig wasabi förlorar smaken efter 15 min.'},
+  {cat:'Psykologi',text:'Hjärnan tar emot 11 miljoner bitar information per sekund — vi är medvetna om 40.',extra:'Resten bearbetas omedvetet. Det är varför vi uppfattar vårt namn i ett bullrigt rum utan att aktivt lyssna — "cocktailpartyeffekten".'},
+  {cat:'Djur',text:'Vargar är nödvändiga för att bevara ekosystemet.',extra:'När vargar återintroducerades i Yellowstone 1995 förändrades till och med flodernas lopp — rådjuren undvek dalgångarna och vegetation återhämtade sig.'},
+  {cat:'Natur',text:'Snöflingor är alltid sexsidiga — men aldrig identiska.',extra:'Vattnets hexagonala kristallstruktur skapar alltid 6 sidor. Varje sida av en flingas mönster är identisk med de andra, men ingen flingas form upprepas.'},
+  {cat:'Sverige',text:'Sverige har en av världens lägsta korruptionsnivåer.',extra:'Transparency International rankar Sverige konsekvent bland de tio minst korrupta länderna. Kvinnorösträtten i Sverige kom 1921.'},
+  {cat:'Geografi',text:'Saudi-Arabien har inga permanenta floder eller sjöar.',extra:'Vattenförsörjning sker via avsaltning (ca 70% av dricksvatten) och fossilt grundvatten. Saudi-Arabien driver världens största avsaltningsanläggningar.'},
+  {cat:'Teknik',text:'Internets totala "vikt" är ca 50 gram.',extra:'Russell Seitz beräknade 2011 att alla elektroner som representerar data på internet har en massa på ca 50 gram (via E=mc²). Hela internet väger som en jordgubbe.'},
+  {cat:'Historia',text:'Tetraditionens ursprung är ca 5 000 år gammalt.',extra:'Legenden säger att kejsaren Shennong fick teblad i sin kokvattenskål 2737 f.Kr. Kina producerar fortfarande ~48% av världens te.'},
+  {cat:'Kroppen',text:'Dina naglar och hår är döda celler — du känner ingen smärta om de klipps.',extra:'Naglar och hår består av keratinprotein. Det synliga håret och nageln är döda. Naglarna på din dominanta hand växer snabbare.'},
+  {cat:'Djur',text:'Delfiner kallar varandra vid namn.',extra:'Delfiner har unika signatursvisslingar som fungerar som individnamn. De imiterar varandras ljud för att tilltala en specifik individ.'},
+  {cat:'Rymden',text:'Du är bokstavligen gjord av stjärnstoft.',extra:'Alla atomer tyngre än väte bildades i stjärnkärnor och spreds vid supernovor. Kolatomerna i ditt DNA och järnet i ditt blod bildades i stjärnor.'},
+  {cat:'Psykologi',text:'Hjärnan ser ansikten — även i brödrost och träknutar.',extra:'Pareidolia: vi ser meningsfulla mönster i slumpmässiga stimuli. Evolutionärt var det bättre att missa ett falskt lejons ansikte än ett riktigt.'},
+  {cat:'Mat',text:'Ursprunget till ketchup är en malaysisk fermenterad fisksås.',extra:'Ordet ketchup härstammar från "kicap". Brittiska sjömän tog den med hem. Tomatketchup är en amerikanisering från 1800-talet.'},
+  {cat:'Natur',text:'Blixten föder ozon.',extra:'Den elektriska laddningen delar syremolekyler som återbildas som ozon (O₃). Blixtar producerar globalt ca 1 000 ton ozon per dag.'},
+  {cat:'Sverige',text:'Dalahästen är ursprungligen ett barnleksak, inte ett nationalsymbol.',extra:'Dalahästar skars av träarbetare på 1600-talen som leksaker. De blev nationellt kända på världsutställningen i New York 1939.'},
+  {cat:'Geografi',text:'New York City och Madrid ligger på ungefär samma breddgrad.',extra:'New York: ca 40.7°N. Madrid: ca 40.4°N. Ändå har New York kallare vintrar — Golfströmmen värmer Europa markant.'},
+  {cat:'Historia',text:'Den äldsta levande organismen är en granrot i Dalarna — 9 550 år gammal.',extra:'"Old Tjikko" har en stam på bara ~5 meter men rotsystemet är ca 9 550 år gammalt, fastställt med koldatering.'},
+  {cat:'Teknik',text:'Datormusen fick sitt namn av sladden — som liknade en mussvans.',extra:'Doug Engelbart uppfann musen 1964. Hans "Mother of All Demos" 1968 visade GUI, video-conferencing och hyperlänkar 40 år i förtid.'},
+  {cat:'Djur',text:'Björnar drömmer under dvalan — troligen om mat.',extra:'Hjärnvågsregistrering hos björnar visar REM-sömnfaser under dvalan. Honbjörnar föder och ammar ungar utan att vara fullt vakna.'},
+  {cat:'Rymden',text:'Om två metallbitar vidrör varandra i vakuum smälter de ihop permanent.',extra:'Kall svetsning: utan oxidlager kan metaller fastna. NASA designar rymdfarkoster med speciella beläggningar för att undvika detta.'},
+  {cat:'Kroppen',text:'Bebisars huvuden är enorma i proportion — för hjärnans skull.',extra:'En nyfödds huvud är ca 25% av kroppslängden. De flesta hjärnans viktiga kopplingar bildas under de första tre åren.'},
+  {cat:'Natur',text:'Solens kärna är 15 miljoner grader — men ytan är "bara" 5 500 grader.',extra:'Paradoxalt nog är solens yttre atmosfär (korona) 1–3 miljoner grader. Exakt varför är fortfarande ett olöst problem i astrofysiken.'},
+];
+
+function shuffleArray(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}return arr;}
+const shuffled=shuffleArray([...FUN_FACTS]);
+let factIdx=parseInt(localStorage.getItem('calFactIdx2')||'0')%shuffled.length;
+let rmTimer=null;
+
+function showFunFact(){
+  const el=document.getElementById('discoverContent');
+  const idx=factIdx%shuffled.length;
+  const fact=shuffled[idx];
+  // Use a deterministic numeric seed based on index for consistent picsum image per slot
+  const seed=(idx*7+13)%1000+1;
+  el.innerHTML=`<img class="discover-img" src="https://picsum.photos/seed/${seed}/600/200" alt="" loading="lazy" onerror="this.style.display='none'"><div class="discover-body"><span class="discover-cat">${fact.cat}</span><br><span class="discover-text">${fact.text}</span><br><button class="discover-readmore">Läs mer</button><div class="discover-extra" id="discoverExtra">${fact.extra}</div></div>`;
+  factIdx++; localStorage.setItem('calFactIdx2',factIdx);
+}
+
+document.getElementById('discoverContent').addEventListener('click',e=>{
+  if(!e.target.classList.contains('discover-readmore'))return;
+  const extra=document.getElementById('discoverExtra');
+  if(!extra)return;
+  const open=extra.classList.toggle('open');
+  e.target.textContent=open?'Stäng':'Läs mer';
+  if(rmTimer)clearTimeout(rmTimer);
+  if(open)rmTimer=setTimeout(()=>{extra.classList.remove('open');e.target.textContent='Läs mer';},60000);
+});
+showFunFact();
+setInterval(showFunFact,10*60*1000);
+
+// ===== WAKE LOCK =====
+(async()=>{
+  try{
+    if('wakeLock' in navigator){
+      await navigator.wakeLock.request('screen');
+      document.addEventListener('visibilitychange',async()=>{
+        if(document.visibilityState==='visible')try{await navigator.wakeLock.request('screen');}catch(e){}
+      });
+    }
+  }catch(e){}
+})();
+</script>
+</body>
+</html>
